@@ -1,9 +1,14 @@
 import { useState } from 'react';
 
 // ── Constantes editables ──────────────────────────────────────────
-const IPREM_ANUAL_12 = 7200; // IPREM 2026, 12 pagas
-const MULTIPLICADOR_GENERAL = 6.5;
-const MULTIPLICADOR_JOVEN = 5.5;
+// Límites de ingresos brutos anuales (unidad de convivencia), cifras directas
+// según tabla oficial de límites por régimen.
+const LIMITE_GENERAL = 54600; // Régimen General — 6,5x IPREM
+const LIMITE_JOVEN = 46200; // Régimen Especial / Vivienda Joven — 5,5x IPREM
+
+// Coeficientes correctores: se suman al límite por cada miembro que cumpla
+const CORRECTOR_19_35 = 4200; // por cada miembro de 19 a 35 años
+const CORRECTOR_MAYOR_65 = 1680; // por cada miembro mayor de 65 años
 
 function RadioRow({ options, value, onChange }) {
   return (
@@ -29,11 +34,12 @@ export default function App() {
   const [anosResidencia, setAnosResidencia] = useState('1');
   const [excepcionResidencia, setExcepcionResidencia] = useState(false);
   const [viviendaPropiedad, setViviendaPropiedad] = useState('no');
-  const [members, setMembers] = useState([{ nombre: '', ingresos: '' }]);
+  const [members, setMembers] = useState([{ nombre: '', edad: '', ingresos: '' }]);
+  const [discapacidadExtra, setDiscapacidadExtra] = useState('');
   const [helpOpen, setHelpOpen] = useState(false);
   const [resultado, setResultado] = useState(null);
 
-  const addMember = () => setMembers([...members, { nombre: '', ingresos: '' }]);
+  const addMember = () => setMembers([...members, { nombre: '', edad: '', ingresos: '' }]);
   const removeMember = (idx) => {
     if (members.length > 1) setMembers(members.filter((_, i) => i !== idx));
   };
@@ -93,8 +99,14 @@ export default function App() {
     allPass = allPass && okVivienda;
 
     const totalIngresos = members.reduce((sum, m) => sum + (parseFloat(m.ingresos) || 0), 0);
-    const multiplicador = regimen === 'joven' ? MULTIPLICADOR_JOVEN : MULTIPLICADOR_GENERAL;
-    const limite = IPREM_ANUAL_12 * multiplicador;
+    const baseLimite = regimen === 'joven' ? LIMITE_JOVEN : LIMITE_GENERAL;
+    const corrector19_35 = members.filter((m) => {
+      const e = parseFloat(m.edad);
+      return e >= 19 && e <= 35;
+    }).length * CORRECTOR_19_35;
+    const correctorMayor65 = members.filter((m) => parseFloat(m.edad) > 65).length * CORRECTOR_MAYOR_65;
+    const correctorDiscapacidad = parseFloat(discapacidadExtra) || 0;
+    const limite = baseLimite + corrector19_35 + correctorMayor65 + correctorDiscapacidad;
     const okIngresos = totalIngresos <= limite && totalIngresos > 0;
     const margen = limite - totalIngresos;
     let detalleIngresos = '';
@@ -110,7 +122,7 @@ export default function App() {
     checks.push({ label: 'Límite de ingresos (capacidad económica)', pass: okIngresos, detail: detalleIngresos });
     allPass = allPass && okIngresos;
 
-    setResultado({ allPass, checks, totalIngresos, limite, margen });
+    setResultado({ allPass, checks, totalIngresos, limite, margen, baseLimite, corrector19_35, correctorMayor65, correctorDiscapacidad });
   }
 
   const cerca =
@@ -152,8 +164,10 @@ export default function App() {
         </p>
 
         <div className="constants-note">
-          ⚠️ IPREM 2026 = 7.200€/año (12 pagas). Límite general = 6,5×IPREM = 46.800€. Límite vivienda joven =
-          5,5×IPREM = 39.600€. Constantes editables en <code>src/App.jsx</code> si cambia el IPREM.
+          ⚠️ Límites de ingresos: Régimen General = 54.600€/año · Vivienda Joven/Especial = 46.200€/año. Por cada
+          miembro de 19 a 35 años se suman +4.200€ al límite; por cada miembro mayor de 65 años, +1.680€. El
+          incremento por discapacidad/dependencia es variable y se introduce manualmente abajo. Constantes
+          editables en <code>src/App.jsx</code>.
         </div>
 
         <div className="card">
@@ -322,7 +336,7 @@ export default function App() {
 
           <div style={{ marginTop: 14 }}>
             {members.map((m, idx) => (
-              <div className="member-row" key={idx}>
+              <div className="member-row member-row-4" key={idx}>
                 <div>
                   <label>Miembro {idx + 1}</label>
                   <input
@@ -330,6 +344,16 @@ export default function App() {
                     placeholder="Nombre (opcional)"
                     value={m.nombre}
                     onChange={(e) => updateMember(idx, 'nombre', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label>Edad</label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    min="0"
+                    value={m.edad}
+                    onChange={(e) => updateMember(idx, 'edad', e.target.value)}
                   />
                 </div>
                 <div>
@@ -351,6 +375,20 @@ export default function App() {
           <button className="add-member" onClick={addMember}>
             + Añadir miembro
           </button>
+
+          <label style={{ marginTop: 18 }}>Incremento por discapacidad o dependencia (€, opcional)</label>
+          <input
+            type="number"
+            min="0"
+            placeholder="0"
+            value={discapacidadExtra}
+            onChange={(e) => setDiscapacidadExtra(e.target.value)}
+          />
+          <p className="hint">
+            Si algún miembro tiene discapacidad o dependencia reconocida, el límite aumenta según el grado de
+            minusvalía. Esta cuantía es variable según normativa — consultar el grado exacto y añadirla aquí
+            manualmente.
+          </p>
         </div>
 
         <button className="btn-primary" onClick={calcular}>
@@ -383,9 +421,29 @@ export default function App() {
                   <span>{resultado.totalIngresos.toLocaleString('es-ES')}€</span>
                 </div>
                 <div className="row">
-                  <span>
-                    Límite aplicable (IPREM {IPREM_ANUAL_12}€ × {regimen === 'joven' ? MULTIPLICADOR_JOVEN : MULTIPLICADOR_GENERAL})
-                  </span>
+                  <span>Límite base ({regimenLabel})</span>
+                  <span>{resultado.baseLimite.toLocaleString('es-ES')}€</span>
+                </div>
+                {resultado.corrector19_35 > 0 && (
+                  <div className="row">
+                    <span>+ Corrector miembros 19-35 años</span>
+                    <span>+{resultado.corrector19_35.toLocaleString('es-ES')}€</span>
+                  </div>
+                )}
+                {resultado.correctorMayor65 > 0 && (
+                  <div className="row">
+                    <span>+ Corrector miembros mayores de 65 años</span>
+                    <span>+{resultado.correctorMayor65.toLocaleString('es-ES')}€</span>
+                  </div>
+                )}
+                {resultado.correctorDiscapacidad > 0 && (
+                  <div className="row">
+                    <span>+ Incremento discapacidad/dependencia</span>
+                    <span>+{resultado.correctorDiscapacidad.toLocaleString('es-ES')}€</span>
+                  </div>
+                )}
+                <div className="row">
+                  <span>Límite total aplicable</span>
                   <span>{resultado.limite.toLocaleString('es-ES')}€</span>
                 </div>
                 <div className="row total">

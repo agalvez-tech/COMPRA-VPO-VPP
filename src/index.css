@@ -155,6 +155,18 @@ select:focus, input:focus{
   background:var(--cream);
   border-radius:6px;
 }
+.member-row.member-row-4{
+  grid-template-columns:1.3fr 0.7fr 1fr auto;
+}
+@media (max-width: 480px){
+  .member-row.member-row-4{
+    grid-template-columns:1fr 1fr;
+  }
+  .member-row.member-row-4 .remove-member{
+    grid-column: 2;
+    justify-self:end;
+  }
+}
 .member-row label{margin:0 0 4px;font-size:11px;}
 .remove-member{
   background:none;
