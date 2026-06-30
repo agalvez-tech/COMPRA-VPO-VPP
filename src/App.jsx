@@ -288,8 +288,13 @@ export default function App() {
           </p>
 
           <div className="income-help">
-            <button type="button" className="income-help-toggle" onClick={() => setHelpOpen(!helpOpen)}>
-              ¿Dónde miro estos ingresos? <span>{helpOpen ? '▴' : '▾'}</span>
+            <button type="button" className={`income-help-toggle ${helpOpen ? 'is-open' : ''}`} onClick={() => setHelpOpen(!helpOpen)}>
+              <span className="income-help-icon">💡</span>
+              <span className="income-help-text">
+                <span className="income-help-title">¿No sabes dónde mirar los ingresos?</span>
+                <span className="income-help-action">{helpOpen ? 'Toca para cerrar la guía' : 'Toca aquí para abrir la guía paso a paso'}</span>
+              </span>
+              <span className="income-help-chevron">{helpOpen ? '▲' : '▼'}</span>
             </button>
             {helpOpen && (
               <div className="income-help-body">
